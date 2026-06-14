@@ -1,0 +1,1366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WiFi Occupancy Report</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --tafe-blue: #003087;
+    --tafe-mid: #0057b8;
+    --tafe-light: #e8f0fb;
+    --accent: #e8630a;
+    --green: #1a7f4b;
+    --yellow: #e6a817;
+    --red: #c0392b;
+    --grey: #6b7280;
+    --border: #d1d5db;
+    --bg: #f8f9fb;
+    --card: #ffffff;
+    --text: #111827;
+    --text-light: #6b7280;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* ── HEADER ── */
+  header {
+    background: var(--tafe-blue);
+    color: #fff;
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  header h1 { font-size: 20px; font-weight: 700; }
+  header p  { font-size: 13px; opacity: 0.75; margin-top: 2px; }
+  .header-badge {
+    margin-left: auto;
+    background: rgba(255,255,255,0.15);
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  /* ── LAYOUT ── */
+  main { max-width: 1200px; margin: 0 auto; padding: 24px 20px; }
+
+  section { margin-bottom: 28px; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+  }
+
+  h2 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--tafe-blue);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  h2 .icon { font-size: 18px; }
+
+  /* ── UPLOAD ZONE ── */
+  #dropzone {
+    border: 2px dashed var(--tafe-mid);
+    border-radius: 10px;
+    background: var(--tafe-light);
+    padding: 40px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+  }
+  #dropzone.drag-over { background: #d0e4f7; border-color: var(--accent); }
+  #dropzone p { color: var(--tafe-mid); font-size: 15px; font-weight: 500; }
+  #dropzone small { color: var(--grey); display: block; margin-top: 6px; }
+  #dropzone input[type=file] { display: none; }
+  .btn {
+    display: inline-block;
+    margin-top: 12px;
+    padding: 8px 20px;
+    background: var(--tafe-blue);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .btn:hover { background: var(--tafe-mid); }
+  .btn-sm {
+    padding: 5px 12px;
+    font-size: 12px;
+    border-radius: 5px;
+  }
+  .btn-danger { background: var(--red); }
+  .btn-danger:hover { background: #a93226; }
+
+  /* ── FILE LIST ── */
+  #file-list { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  #file-list li {
+    background: var(--tafe-light);
+    border: 1px solid #b8d0ef;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 12px;
+    color: var(--tafe-blue);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  #file-list li .remove {
+    cursor: pointer;
+    color: var(--red);
+    font-weight: 700;
+    font-size: 14px;
+    line-height: 1;
+  }
+
+  /* ── ROOM CONFIG TABLE ── */
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    background: var(--tafe-light);
+    text-align: left;
+    padding: 8px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--tafe-blue);
+    border-bottom: 2px solid var(--border);
+  }
+  td {
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  tr:last-child td { border-bottom: none; }
+  td input[type=text], td input[type=number] {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 5px 8px;
+    font-size: 13px;
+    font-family: inherit;
+    color: var(--text);
+  }
+  td input:focus { outline: 2px solid var(--tafe-mid); border-color: transparent; }
+  .ap-code { font-family: monospace; font-size: 12px; color: var(--grey); }
+
+  /* ── FILTERS ── */
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: flex-end;
+  }
+  .filter-group { display: flex; flex-direction: column; gap: 4px; }
+  .filter-group label { font-size: 12px; font-weight: 600; color: var(--grey); }
+  .filter-group input, .filter-group select {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 13px;
+    font-family: inherit;
+    background: #fff;
+  }
+  .filter-group input:focus, .filter-group select:focus {
+    outline: 2px solid var(--tafe-mid);
+    border-color: transparent;
+  }
+
+  /* ── KPI CARDS ── */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+  }
+  .kpi-grid.single-row {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  }
+  .kpi-grid.single-row .kpi { min-width: 0; }
+  .kpi {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    border-top: 3px solid var(--tafe-blue);
+  }
+  .kpi .kpi-label { font-size: 11px; font-weight: 600; color: var(--grey); text-transform: uppercase; letter-spacing: 0.05em; }
+  .kpi .kpi-value { font-size: 28px; font-weight: 700; color: var(--tafe-blue); margin: 4px 0; }
+  .kpi .kpi-sub { font-size: 11px; color: var(--grey); }
+
+  /* ── CHARTS ── */
+  .chart-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  @media (max-width: 768px) { .chart-grid { grid-template-columns: 1fr; } }
+  .chart-box {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+  }
+  .chart-box.full-width { grid-column: 1 / -1; }
+  .chart-box h3 { font-size: 13px; font-weight: 600; color: var(--tafe-blue); margin-bottom: 12px; }
+  .chart-box canvas { max-height: 280px; }
+
+  /* ── HEATMAP ── */
+  #heatmap-container { overflow-x: auto; }
+  .heatmap-table { border-collapse: collapse; font-size: 11px; min-width: 600px; }
+  .heatmap-table th {
+    background: var(--tafe-light);
+    padding: 5px 6px;
+    font-size: 11px;
+    white-space: nowrap;
+    font-weight: 600;
+    color: var(--tafe-blue);
+  }
+  .heatmap-table td {
+    width: 28px;
+    height: 28px;
+    text-align: center;
+    padding: 0;
+    border: 1px solid #e5e7eb;
+    font-size: 10px;
+    font-weight: 600;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  .heatmap-table .row-label {
+    text-align: right;
+    padding: 4px 8px 4px 4px;
+    font-weight: 600;
+    white-space: nowrap;
+    color: var(--tafe-blue);
+    width: auto;
+  }
+
+  /* ── SUMMARY TABLE ── */
+  #summary-table th, #summary-table td { padding: 9px 12px; font-size: 13px; }
+  .pill {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #fff;
+  }
+  .pill-green  { background: var(--green); }
+  .pill-yellow { background: var(--yellow); }
+  .pill-red    { background: var(--red); }
+  .pill-grey   { background: var(--grey); }
+
+  /* ── TOGGLE GROUP ── */
+  .toggle-group {
+    display: flex;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .toggle-btn {
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: inherit;
+    border: none;
+    background: #fff;
+    color: var(--grey);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .toggle-btn + .toggle-btn { border-left: 1px solid var(--border); }
+  .toggle-btn.active { background: var(--tafe-blue); color: #fff; }
+  .toggle-btn:hover:not(.active) { background: var(--tafe-light); color: var(--tafe-blue); }
+
+  /* ── PLACEHOLDER ── */
+  #placeholder {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--grey);
+  }
+  #placeholder .big { font-size: 48px; }
+  #placeholder p { margin-top: 12px; font-size: 15px; }
+
+  /* ── HIDDEN / SHOWN ── */
+  .hidden { display: none !important; }
+
+  /* ── PRINT ── */
+  @media print {
+    header { background: var(--tafe-blue) !important; }
+    body { background: #fff; }
+    #upload-section, #config-section, #filter-section, .no-print { display: none !important; }
+    .chart-grid { grid-template-columns: 1fr 1fr; }
+    .card, .chart-box, .kpi { break-inside: avoid; }
+    main { padding: 0; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>📶 WiFi Occupancy Report</h1>
+    <p id="report-subtitle">Upload access point data files to begin</p>
+  </div>
+  <div class="header-badge" id="header-range"></div>
+</header>
+
+<main>
+
+  <!-- ── UPLOAD ── -->
+  <section id="upload-section">
+    <div class="card">
+      <h2><span class="icon">📁</span> Upload Access Point Data</h2>
+      <div id="dropzone">
+        <p>Drag &amp; drop CSV files here</p>
+        <small>One file per access point — exported from your router management system</small>
+        <br>
+        <button class="btn" onclick="document.getElementById('file-input').click()">Browse files</button>
+        <input type="file" id="file-input" multiple accept=".csv">
+      </div>
+      <ul id="file-list"></ul>
+    </div>
+  </section>
+
+  <!-- ── ROOM CONFIG ── -->
+  <section id="config-section" class="hidden">
+    <div class="card">
+      <h2><span class="icon">🏫</span> Room / Space Configuration</h2>
+      <p style="color:var(--grey);font-size:13px;margin-bottom:14px;">
+        Enter a friendly name and capacity for each access point. These settings are saved automatically in your browser.
+      </p>
+      <table id="config-table">
+        <thead>
+          <tr>
+            <th style="width:30%">Access Point ID</th>
+            <th style="width:35%">Room / Space Name</th>
+            <th style="width:20%">Capacity (people)</th>
+            <th style="width:15%"></th>
+          </tr>
+        </thead>
+        <tbody id="config-body"></tbody>
+      </table>
+      <div style="margin-top:14px;display:flex;gap:10px;">
+        <button class="btn" onclick="applyConfig()">Apply &amp; Generate Report</button>
+        <button class="btn btn-sm" style="background:var(--grey)" onclick="resetConfig()">Reset names</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── FILTERS ── -->
+  <section id="filter-section" class="hidden">
+    <div class="card">
+      <h2><span class="icon">🔍</span> Filters</h2>
+      <div class="filters">
+        <div class="filter-group">
+          <label>From date</label>
+          <input type="date" id="filter-from" onchange="renderAll()">
+        </div>
+        <div class="filter-group">
+          <label>To date</label>
+          <input type="date" id="filter-to" onchange="renderAll()">
+        </div>
+        <div class="filter-group">
+          <label>Hours (from)</label>
+          <select id="filter-hour-from" onchange="renderAll()">
+            <option value="0">12:00 AM</option>
+            <option value="6">6:00 AM</option>
+            <option value="7" selected>7:00 AM</option>
+            <option value="8">8:00 AM</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Hours (to)</label>
+          <select id="filter-hour-to" onchange="renderAll()">
+            <option value="17">5:00 PM</option>
+            <option value="18">6:00 PM</option>
+            <option value="19" selected>7:00 PM</option>
+            <option value="20">8:00 PM</option>
+            <option value="23">11:00 PM</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Days</label>
+          <select id="filter-days" onchange="renderAll()">
+            <option value="all">All days</option>
+            <option value="weekdays" selected>Weekdays only</option>
+            <option value="weekends">Weekends only</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Room</label>
+          <select id="filter-room" onchange="renderAll()">
+            <option value="all">All rooms</option>
+          </select>
+        </div>
+        <div class="filter-group" style="margin-left:auto;">
+          <label>&nbsp;</label>
+          <button class="btn btn-sm no-print" onclick="window.print()">🖨 Print / Save PDF</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── PLACEHOLDER ── -->
+  <div id="placeholder">
+    <div class="big">📶</div>
+    <p>Upload one or more access point CSV files to generate your occupancy report.</p>
+  </div>
+
+  <!-- ── KPI SUMMARY ── -->
+  <section id="kpi-section" class="hidden">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <div style="font-size:15px;font-weight:600;color:var(--tafe-blue)">📊 Summary</div>
+      <div class="toggle-group" id="kpi-toggle">
+        <button class="toggle-btn active" data-mode="total" onclick="setKpiMode('total')">Total</button>
+        <button class="toggle-btn" data-mode="rooms" onclick="setKpiMode('rooms')">Per Room</button>
+      </div>
+    </div>
+    <div class="kpi-grid single-row" id="kpi-grid"></div>
+  </section>
+
+  <!-- ── CHARTS ── -->
+  <section id="charts-section" class="hidden">
+    <div class="chart-grid">
+      <div class="chart-box full-width">
+        <h3>📈 Occupancy Over Time — Per Room with Combined Total</h3>
+        <canvas id="chart-timeline"></canvas>
+      </div>
+      <div class="chart-box">
+        <h3>🏆 Peak Clients by Room</h3>
+        <canvas id="chart-peak"></canvas>
+      </div>
+      <div class="chart-box">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <h3 style="margin-bottom:0" id="hourly-title">⏰ Average Occupancy by Hour of Day</h3>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+          <span style="font-size:11px;color:var(--grey);font-weight:600;">Metric:</span>
+          <div class="toggle-group" id="hourly-toggle">
+            <button class="toggle-btn active" data-mode="avg" onclick="setHourlyMode('avg')">Average</button>
+            <button class="toggle-btn" data-mode="peak" onclick="setHourlyMode('peak')">Peak</button>
+          </div>
+          <span style="font-size:11px;color:var(--grey);font-weight:600;margin-left:8px;">Scope:</span>
+          <div class="toggle-group" id="hourly-scope-toggle">
+            <button class="toggle-btn active" data-scope="combined" onclick="setHourlyScope('combined')">Combined</button>
+            <button class="toggle-btn" data-scope="rooms" onclick="setHourlyScope('rooms')">Per Room</button>
+          </div>
+        </div>
+        <p id="hourly-hint" style="font-size:11px;color:var(--grey);margin-bottom:10px;">
+          Suitable for shared/social spaces — shows typical demand at each hour.
+        </p>
+        <canvas id="chart-hourly"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── HEATMAP ── -->
+  <section id="heatmap-section" class="hidden">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:10px;">
+        <h2 style="margin-bottom:0"><span class="icon">🌡️</span> Occupancy Heatmap — by Day &amp; Hour</h2>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <label style="font-size:12px;font-weight:600;color:var(--grey);">Room:</label>
+          <select id="heatmap-room-select" onchange="setHeatmapRoom(this.value)"
+            style="border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:12px;font-family:inherit;background:#fff;">
+            <option value="all">All rooms (combined)</option>
+          </select>
+        </div>
+      </div>
+      <p id="heatmap-hint" style="font-size:12px;color:var(--grey);margin-bottom:12px;">Average connected clients. Darker = busier.</p>
+      <div id="heatmap-container"></div>
+    </div>
+  </section>
+
+  <!-- ── SUMMARY TABLE ── -->
+  <section id="summary-section" class="hidden">
+    <div class="card">
+      <h2><span class="icon">📋</span> Room Summary</h2>
+      <div style="overflow-x:auto;">
+        <table id="summary-table">
+          <thead>
+            <tr>
+              <th>Room / Space</th>
+              <th>Access Point</th>
+              <th>Peak Clients</th>
+              <th>Avg Clients (active hours)</th>
+              <th>Busiest Day</th>
+              <th>Busiest Hour</th>
+              <th>Capacity</th>
+              <th>Peak Utilisation</th>
+            </tr>
+          </thead>
+          <tbody id="summary-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════
+let rawData   = {};   // { apId: [ {time: Date, clients: number} ] }
+let roomConfig = {};  // { apId: { name: string, capacity: number } }
+let charts    = {};   // Chart.js instances
+
+// ═══════════════════════════════════════════════════════
+// AP ID EXTRACTION FROM FILENAME
+// ═══════════════════════════════════════════════════════
+function extractApId(filename) {
+  // Matches patterns like NE00P002010AP01, AP-01, AP_Room3, etc.
+  const m = filename.match(/([A-Z0-9]+(?:[-_]?AP[-_]?\d+))/i)
+          || filename.match(/(AP[-_]?\d+)/i)
+          || filename.match(/trend\s+(\S+)\s+during/i);
+  if (m) return m[1].toUpperCase();
+  // Fallback: strip extension and "Active Clients trend" / "during …"
+  return filename.replace(/\.csv$/i,'')
+                 .replace(/Active Clients trend\s*/i,'')
+                 .replace(/\s*during.*/i,'')
+                 .trim().toUpperCase().slice(0,20);
+}
+
+// ═══════════════════════════════════════════════════════
+// FILE UPLOAD HANDLING
+// ═══════════════════════════════════════════════════════
+const dropzone  = document.getElementById('dropzone');
+const fileInput = document.getElementById('file-input');
+const fileList  = document.getElementById('file-list');
+
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+dropzone.addEventListener('dragleave', ()  => dropzone.classList.remove('drag-over'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('drag-over');
+  handleFiles([...e.dataTransfer.files]);
+});
+fileInput.addEventListener('change', () => handleFiles([...fileInput.files]));
+
+function handleFiles(files) {
+  const csvs = files.filter(f => f.name.toLowerCase().endsWith('.csv'));
+  if (!csvs.length) return alert('Please select CSV files.');
+  csvs.forEach(parseFile);
+}
+
+function parseFile(file) {
+  const apId = extractApId(file.name);
+  Papa.parse(file, {
+    header: true,
+    skipEmptyLines: true,
+    complete(results) {
+      const rows = results.data
+        .map(r => {
+          const timeKey   = Object.keys(r).find(k => k.toLowerCase().includes('time'));
+          const clientKey = Object.keys(r).find(k => k.toLowerCase().includes('client'));
+          if (!timeKey || !clientKey) return null;
+          const t = new Date(r[timeKey].replace(/"/g,''));
+          const c = parseInt(r[clientKey], 10);
+          return isNaN(t.getTime()) || isNaN(c) ? null : { time: t, clients: c };
+        })
+        .filter(Boolean);
+
+      rawData[apId] = rows;
+
+      // Default config from localStorage or sensible defaults
+      if (!roomConfig[apId]) {
+        const saved = loadConfig();
+        roomConfig[apId] = saved[apId] || { name: apId, capacity: 30 };
+      }
+
+      refreshFileList();
+      buildConfigTable();
+      showConfigSection();
+    },
+    error() { alert(`Could not parse ${file.name}`); }
+  });
+}
+
+function refreshFileList() {
+  fileList.innerHTML = '';
+  Object.keys(rawData).forEach(apId => {
+    const li = document.createElement('li');
+    li.innerHTML = `<span>${roomConfig[apId]?.name || apId}</span>
+      <span class="ap-code">(${apId})</span>
+      <span class="remove" title="Remove" onclick="removeAp('${apId}')">✕</span>`;
+    fileList.appendChild(li);
+  });
+}
+
+function removeAp(apId) {
+  delete rawData[apId];
+  delete roomConfig[apId];
+  refreshFileList();
+  if (Object.keys(rawData).length === 0) {
+    hideReportSections();
+    document.getElementById('config-section').classList.add('hidden');
+    document.getElementById('placeholder').classList.remove('hidden');
+  } else {
+    buildConfigTable();
+    applyConfig();
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// ROOM CONFIG TABLE
+// ═══════════════════════════════════════════════════════
+function buildConfigTable() {
+  const tbody = document.getElementById('config-body');
+  tbody.innerHTML = '';
+  Object.keys(rawData).sort().forEach(apId => {
+    const cfg = roomConfig[apId] || { name: apId, capacity: 30 };
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="ap-code">${apId}</td>
+      <td><input type="text" id="name-${apId}" value="${cfg.name}" placeholder="e.g. Room 101"></td>
+      <td><input type="number" id="cap-${apId}" value="${cfg.capacity}" min="1" max="500" style="width:80px"></td>
+      <td></td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function showConfigSection() {
+  document.getElementById('config-section').classList.remove('hidden');
+  document.getElementById('filter-section').classList.remove('hidden');
+  applyConfig();
+}
+
+function applyConfig() {
+  // Read config from table
+  Object.keys(rawData).forEach(apId => {
+    const nameEl = document.getElementById(`name-${apId}`);
+    const capEl  = document.getElementById(`cap-${apId}`);
+    if (nameEl) roomConfig[apId] = {
+      name: nameEl.value.trim() || apId,
+      capacity: parseInt(capEl.value, 10) || 30
+    };
+  });
+  saveConfig();
+  populateRoomFilter();
+  setDefaultDateFilters();
+  renderAll();
+}
+
+function resetConfig() {
+  Object.keys(rawData).forEach(apId => {
+    roomConfig[apId] = { name: apId, capacity: 30 };
+    const n = document.getElementById(`name-${apId}`);
+    const c = document.getElementById(`cap-${apId}`);
+    if (n) n.value = apId;
+    if (c) c.value = 30;
+  });
+  saveConfig();
+  renderAll();
+}
+
+// ═══════════════════════════════════════════════════════
+// LOCALSTORAGE PERSISTENCE
+// ═══════════════════════════════════════════════════════
+function saveConfig() {
+  try { localStorage.setItem('wifi_room_config', JSON.stringify(roomConfig)); } catch(e) {}
+}
+function loadConfig() {
+  try { return JSON.parse(localStorage.getItem('wifi_room_config') || '{}'); } catch(e) { return {}; }
+}
+
+// ═══════════════════════════════════════════════════════
+// FILTERS
+// ═══════════════════════════════════════════════════════
+function setDefaultDateFilters() {
+  const allDates = Object.values(rawData).flat().map(r => r.time);
+  if (!allDates.length) return;
+  const min = new Date(Math.min(...allDates));
+  const max = new Date(Math.max(...allDates));
+  const fromEl = document.getElementById('filter-from');
+  const toEl   = document.getElementById('filter-to');
+  if (!fromEl.value) fromEl.value = toISO(min);
+  if (!toEl.value)   toEl.value   = toISO(max);
+  document.getElementById('header-range').textContent =
+    `${min.toLocaleDateString()} – ${max.toLocaleDateString()}`;
+}
+
+function toISO(d) {
+  return d.toISOString().slice(0,10);
+}
+
+function populateRoomFilter() {
+  const sel = document.getElementById('filter-room');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="all">All rooms</option>';
+  Object.keys(rawData).sort().forEach(apId => {
+    const o = document.createElement('option');
+    o.value = apId;
+    o.textContent = roomConfig[apId]?.name || apId;
+    sel.appendChild(o);
+  });
+  if (cur) sel.value = cur;
+}
+
+function getFilters() {
+  return {
+    from:      new Date(document.getElementById('filter-from').value + 'T00:00:00'),
+    to:        new Date(document.getElementById('filter-to').value   + 'T23:59:59'),
+    hourFrom:  parseInt(document.getElementById('filter-hour-from').value, 10),
+    hourTo:    parseInt(document.getElementById('filter-hour-to').value,   10),
+    days:      document.getElementById('filter-days').value,
+    room:      document.getElementById('filter-room').value,
+  };
+}
+
+function filterRows(rows, f) {
+  return rows.filter(r => {
+    const d = r.time;
+    if (d < f.from || d > f.to) return false;
+    const h = d.getHours();
+    if (h < f.hourFrom || h > f.hourTo) return false;
+    const dow = d.getDay(); // 0=Sun,6=Sat
+    if (f.days === 'weekdays' && (dow === 0 || dow === 6)) return false;
+    if (f.days === 'weekends' && dow > 0 && dow < 6) return false;
+    return true;
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+// MASTER RENDER
+// ═══════════════════════════════════════════════════════
+function renderAll() {
+  if (!Object.keys(rawData).length) return;
+  const f = getFilters();
+
+  // Build filtered dataset per AP
+  const filtered = {};
+  const aps = Object.keys(rawData).sort();
+  aps.forEach(apId => {
+    if (f.room !== 'all' && f.room !== apId) return;
+    filtered[apId] = filterRows(rawData[apId], f);
+  });
+
+  renderKPIs(filtered);
+  renderTimeline(filtered);
+  renderPeakBar(filtered);
+  renderHourlyBar(filtered);
+  renderHeatmap(filtered);
+  populateHeatmapRoomSelect(filtered);
+  renderSummaryTable(filtered);
+  showReportSections();
+  updateSubtitle(filtered);
+}
+
+function showReportSections() {
+  document.getElementById('placeholder').classList.add('hidden');
+  ['kpi-section','charts-section','heatmap-section','summary-section'].forEach(id =>
+    document.getElementById(id).classList.remove('hidden')
+  );
+}
+
+function hideReportSections() {
+  ['kpi-section','charts-section','heatmap-section','summary-section'].forEach(id =>
+    document.getElementById(id).classList.add('hidden')
+  );
+}
+
+function updateSubtitle(filtered) {
+  const apCount = Object.keys(filtered).length;
+  const roomNames = Object.keys(filtered).map(id => roomConfig[id]?.name || id).join(', ');
+  document.getElementById('report-subtitle').textContent =
+    `${apCount} access point${apCount !== 1 ? 's' : ''}: ${roomNames}`;
+}
+
+// ═══════════════════════════════════════════════════════
+// KPI CARDS — Total or Per Room
+// ═══════════════════════════════════════════════════════
+let kpiMode = 'total'; // 'total' | 'rooms'
+let _lastFilteredKpi = null;
+
+function setKpiMode(mode) {
+  kpiMode = mode;
+  document.querySelectorAll('#kpi-toggle .toggle-btn').forEach(btn =>
+    btn.classList.toggle('active', btn.dataset.mode === mode)
+  );
+  if (_lastFilteredKpi) renderKPIs(_lastFilteredKpi);
+}
+
+function roomStats(rows, capacity) {
+  const bySlot = {};
+  rows.forEach(r => {
+    const k = r.time.toISOString();
+    bySlot[k] = (bySlot[k] || 0) + r.clients;
+  });
+  const vals   = Object.values(bySlot);
+  const peak   = vals.length ? Math.max(...vals) : 0;
+  const active = vals.filter(v => v > 0);
+  const avg    = active.length ? active.reduce((a,b)=>a+b,0) / active.length : 0;
+  const pct    = capacity ? Math.round(peak / capacity * 100) : 0;
+
+  // Active days and busiest day for this room
+  const byDay = {};
+  rows.forEach(r => {
+    const day = r.time.toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'short'});
+    byDay[day] = (byDay[day] || 0) + r.clients;
+  });
+  const activeDays = new Set(rows.filter(r=>r.clients>0).map(r=>r.time.toDateString())).size;
+  const busiestDay = Object.entries(byDay).sort((a,b)=>b[1]-a[1])[0]?.[0] || '—';
+
+  return { peak, avg, pct, activeDays, busiestDay };
+}
+
+function pillClass(pct) {
+  return pct >= 90 ? 'pill-red' : pct >= 60 ? 'pill-yellow' : pct > 0 ? 'pill-green' : 'pill-grey';
+}
+
+function renderKPIs(filtered) {
+  _lastFilteredKpi = filtered;
+  const allRows = Object.values(filtered).flat();
+  if (!allRows.length) return;
+
+  const grid = document.getElementById('kpi-grid');
+
+  if (kpiMode === 'rooms') {
+    // ── Per-room — one full-width card per room, all 5 stats in a single row ──
+    grid.classList.remove('single-row');
+    grid.style.gridTemplateColumns = '1fr'; // one card per row
+    const cards = Object.keys(filtered).sort().map((apId, idx) => {
+      const cfg = roomConfig[apId] || { name: apId, capacity: 30 };
+      const s   = roomStats(filtered[apId], cfg.capacity);
+      return `
+        <div class="kpi" style="border-top-color:${COLORS[idx % COLORS.length]}">
+          <div style="display:grid;grid-template-columns:160px repeat(5,minmax(0,1fr));align-items:center;gap:12px;">
+            <div style="font-size:14px;font-weight:700;color:var(--text);border-right:1px solid var(--border);padding-right:12px">${cfg.name}</div>
+            <div>
+              <div class="kpi-label">Peak clients</div>
+              <div class="kpi-value" style="font-size:22px">${s.peak}</div>
+              <div class="kpi-sub">simultaneous</div>
+            </div>
+            <div>
+              <div class="kpi-label">Average</div>
+              <div class="kpi-value" style="font-size:22px">${s.avg.toFixed(1)}</div>
+              <div class="kpi-sub">active hrs</div>
+            </div>
+            <div>
+              <div class="kpi-label">Peak utilisation</div>
+              <div class="kpi-value" style="font-size:22px">${s.pct}%</div>
+              <div class="kpi-sub">of ${cfg.capacity} capacity</div>
+            </div>
+            <div>
+              <div class="kpi-label">Active days</div>
+              <div class="kpi-value" style="font-size:22px">${s.activeDays}</div>
+              <div class="kpi-sub">with &gt;0 clients</div>
+            </div>
+            <div>
+              <div class="kpi-label">Busiest day</div>
+              <div style="font-size:13px;font-weight:600;color:var(--tafe-blue);margin-top:4px;line-height:1.4">${s.busiestDay}</div>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+    grid.innerHTML = cards;
+    return;
+  }
+
+  // ── Combined totals — single row of 5 ──
+  grid.style.gridTemplateColumns = '';
+  grid.classList.add('single-row');
+  const byTime = {};
+  allRows.forEach(r => {
+    const key = r.time.toISOString();
+    byTime[key] = (byTime[key] || 0) + r.clients;
+  });
+  const totals   = Object.values(byTime);
+  const peak     = Math.max(...totals);
+  const active   = totals.filter(v => v > 0);
+  const avg      = active.length ? active.reduce((a,b)=>a+b,0) / active.length : 0;
+  const totalCap = Object.keys(filtered).reduce((a, id) => a + (roomConfig[id]?.capacity || 30), 0);
+  const peakPct  = totalCap ? Math.round(peak / totalCap * 100) : 0;
+
+  const byDay = {};
+  Object.entries(byTime).forEach(([d, v]) => {
+    const day = new Date(d).toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'short'});
+    byDay[day] = (byDay[day] || 0) + v;
+  });
+  const busiestDay  = Object.entries(byDay).sort((a,b)=>b[1]-a[1])[0]?.[0] || '—';
+  const activeDays  = new Set(allRows.filter(r=>r.clients>0).map(r=>r.time.toDateString())).size;
+
+  grid.innerHTML = `
+    <div class="kpi">
+      <div class="kpi-label">Peak simultaneous clients</div>
+      <div class="kpi-value">${peak}</div>
+      <div class="kpi-sub">across all rooms</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Average (active hours)</div>
+      <div class="kpi-value">${avg.toFixed(1)}</div>
+      <div class="kpi-sub">clients per hour slot</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Peak utilisation</div>
+      <div class="kpi-value">${peakPct}%</div>
+      <div class="kpi-sub">of total capacity (${totalCap})</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Active days in range</div>
+      <div class="kpi-value">${activeDays}</div>
+      <div class="kpi-sub">days with &gt;0 clients</div>
+    </div>
+    <div class="kpi" style="border-top-color:var(--accent)">
+      <div class="kpi-label">Busiest day</div>
+      <div class="kpi-value" style="font-size:16px;padding-top:4px">${busiestDay}</div>
+      <div class="kpi-sub">by total client-hours</div>
+    </div>
+  `;
+}
+
+// ═══════════════════════════════════════════════════════
+// CHART HELPERS
+// ═══════════════════════════════════════════════════════
+// Wong (2011) colorblind-safe palette — distinguishable across deuteranopia, protanopia & tritanopia
+const COLORS = [
+  '#0072B2', // blue
+  '#D55E00', // vermillion
+  '#009E73', // green
+  '#CC79A7', // mauve/pink
+  '#E69F00', // orange
+  '#56B4E9', // sky blue
+  '#F0E442', // yellow
+  '#000000', // black (8th room)
+];
+
+function destroyChart(id) {
+  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+}
+
+function buildTimeSeries(filtered) {
+  // Collect all unique timestamps across all APs, sorted
+  const allTimes = [...new Set(
+    Object.values(filtered).flat().map(r => r.time.getTime())
+  )].sort((a,b) => a-b);
+  return allTimes;
+}
+
+// ═══════════════════════════════════════════════════════
+// TIMELINE CHART — Per Room + Combined total
+// ═══════════════════════════════════════════════════════
+function renderTimeline(filtered) {
+  destroyChart('timeline');
+  const times = buildTimeSeries(filtered);
+  const labels = times.map(t => {
+    const d = new Date(t);
+    return d.toLocaleDateString('en-AU',{month:'short',day:'numeric'}) + ' ' +
+           d.toLocaleTimeString('en-AU',{hour:'numeric',hour12:true});
+  });
+
+  // Per-room lines
+  const datasets = Object.keys(filtered).sort().map((apId, i) => {
+    const byTime = {};
+    filtered[apId].forEach(r => { byTime[r.time.getTime()] = r.clients; });
+    return {
+      label: roomConfig[apId]?.name || apId,
+      data: times.map(t => byTime[t] ?? null),
+      borderColor: COLORS[i % COLORS.length],
+      backgroundColor: 'transparent',
+      tension: 0.3,
+      pointRadius: times.length > 200 ? 0 : 2,
+      borderWidth: 2,
+      spanGaps: false,
+    };
+  });
+
+  // Combined total as a dashed dark line
+  const combined = {};
+  Object.values(filtered).flat().forEach(r => {
+    const k = r.time.getTime();
+    combined[k] = (combined[k] || 0) + r.clients;
+  });
+  datasets.push({
+    label: 'Combined total',
+    data: times.map(t => combined[t] || 0),
+    borderColor: '#333333',
+    backgroundColor: 'transparent',
+    borderWidth: 2.5,
+    borderDash: [6, 3],
+    tension: 0.3,
+    pointRadius: 0,
+    spanGaps: true,
+    order: -1,
+  });
+
+  const ctx = document.getElementById('chart-timeline').getContext('2d');
+  charts['timeline'] = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: chartOptions('Connected clients')
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+// PEAK BAR CHART
+// ═══════════════════════════════════════════════════════
+function renderPeakBar(filtered) {
+  destroyChart('peak');
+  const labels = [], peaks = [], caps = [];
+  Object.keys(filtered).sort().forEach(apId => {
+    const rows = filtered[apId];
+    labels.push(roomConfig[apId]?.name || apId);
+    peaks.push(rows.length ? Math.max(...rows.map(r=>r.clients)) : 0);
+    caps.push(roomConfig[apId]?.capacity || 30);
+  });
+
+  const ctx = document.getElementById('chart-peak').getContext('2d');
+  charts['peak'] = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Peak clients', data: peaks, backgroundColor: COLORS[0], borderRadius: 4 },
+        { label: 'Capacity', data: caps, backgroundColor: 'rgba(0,0,0,0.08)', borderRadius: 4 }
+      ]
+    },
+    options: { ...chartOptions('Peak clients'), scales: { y: { beginAtZero: true } } }
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+// HOURLY BAR — metric (avg/peak) × scope (combined/rooms)
+// ═══════════════════════════════════════════════════════
+let hourlyMode  = 'avg';      // 'avg' | 'peak'
+let hourlyScope = 'combined'; // 'combined' | 'rooms'
+let _lastFiltered = null;
+
+function setHourlyMode(mode) {
+  hourlyMode = mode;
+  document.querySelectorAll('#hourly-toggle .toggle-btn').forEach(btn =>
+    btn.classList.toggle('active', btn.dataset.mode === mode)
+  );
+  updateHourlyHint();
+  if (_lastFiltered) renderHourlyBar(_lastFiltered);
+}
+
+function setHourlyScope(scope) {
+  hourlyScope = scope;
+  document.querySelectorAll('#hourly-scope-toggle .toggle-btn').forEach(btn =>
+    btn.classList.toggle('active', btn.dataset.scope === scope)
+  );
+  updateHourlyHint();
+  if (_lastFiltered) renderHourlyBar(_lastFiltered);
+}
+
+function updateHourlyHint() {
+  const hints = {
+    avg: 'Shows typical demand — suitable for shared/social spaces.',
+    peak: 'Shows highest recorded count — suitable for classrooms and offices.',
+  };
+  document.getElementById('hourly-title').textContent =
+    (hourlyMode === 'avg' ? '⏰ Average' : '⏰ Peak') + ' Occupancy by Hour of Day';
+  document.getElementById('hourly-hint').textContent = hints[hourlyMode];
+}
+
+// Build per-room hour stats: { apId: { sums, counts, peaks } }
+function buildRoomHourStats(filtered) {
+  const stats = {};
+  Object.keys(filtered).forEach(apId => {
+    stats[apId] = {
+      sums: new Array(24).fill(0),
+      counts: new Array(24).fill(0),
+      peaks: new Array(24).fill(0),
+    };
+    // For peak we need to track per-date-hour totals for this room
+    const bySlot = {};
+    filtered[apId].forEach(r => {
+      const h = r.time.getHours();
+      const key = `${r.time.toDateString()}|${h}`;
+      bySlot[key] = (bySlot[key] || 0) + r.clients;
+      stats[apId].sums[h]   += r.clients;
+      stats[apId].counts[h] += 1;
+    });
+    Object.entries(bySlot).forEach(([key, val]) => {
+      const h = parseInt(key.split('|')[1], 10);
+      if (val > stats[apId].peaks[h]) stats[apId].peaks[h] = val;
+    });
+  });
+  return stats;
+}
+
+function renderHourlyBar(filtered) {
+  _lastFiltered = filtered;
+  destroyChart('hourly');
+
+  const f      = getFilters();
+  const hours  = [];
+  const labels = [];
+  for (let h = f.hourFrom; h <= f.hourTo; h++) {
+    hours.push(h);
+    labels.push(h === 0 ? '12am' : h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h-12}pm`);
+  }
+
+  const isAvg = hourlyMode === 'avg';
+  let datasets;
+
+  if (hourlyScope === 'rooms') {
+    // One bar series per room
+    const roomStats = buildRoomHourStats(filtered);
+    datasets = Object.keys(filtered).sort().map((apId, i) => {
+      const s = roomStats[apId];
+      const data = hours.map(h =>
+        isAvg
+          ? (s.counts[h] ? +(s.sums[h] / s.counts[h]).toFixed(1) : 0)
+          : s.peaks[h]
+      );
+      return {
+        label: roomConfig[apId]?.name || apId,
+        data,
+        backgroundColor: COLORS[i % COLORS.length],
+        borderRadius: 3,
+      };
+    });
+  } else {
+    // Combined — sum all rooms per slot then avg/peak
+    const combinedSums   = new Array(24).fill(0);
+    const combinedCounts = new Array(24).fill(0);
+    const combinedPeaks  = new Array(24).fill(0);
+    const bySlot = {};
+    Object.values(filtered).flat().forEach(r => {
+      const h   = r.time.getHours();
+      const key = `${r.time.toDateString()}|${h}`;
+      bySlot[key] = (bySlot[key] || 0) + r.clients;
+      combinedSums[h]   += r.clients;
+      combinedCounts[h] += 1;
+    });
+    Object.entries(bySlot).forEach(([key, val]) => {
+      const h = parseInt(key.split('|')[1], 10);
+      if (val > combinedPeaks[h]) combinedPeaks[h] = val;
+    });
+    const data = hours.map(h =>
+      isAvg
+        ? (combinedCounts[h] ? +(combinedSums[h] / combinedCounts[h]).toFixed(1) : 0)
+        : combinedPeaks[h]
+    );
+    datasets = [{
+      label: isAvg ? 'Avg clients' : 'Peak clients',
+      data,
+      backgroundColor: isAvg ? COLORS[2] : COLORS[0],
+      borderRadius: 4,
+    }];
+  }
+
+  const yLabel = isAvg ? 'Average clients' : 'Peak clients';
+  const ctx = document.getElementById('chart-hourly').getContext('2d');
+  charts['hourly'] = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets },
+    options: {
+      ...chartOptions(yLabel),
+      scales: { y: { beginAtZero: true } },
+    }
+  });
+}
+
+function chartOptions(yLabel) {
+  return {
+    responsive: true,
+    maintainAspectRatio: true,
+    plugins: {
+      legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } }
+    },
+    scales: {
+      x: { ticks: { font: { size: 10 }, maxTicksLimit: 20, maxRotation: 30 } },
+      y: { beginAtZero: true, title: { display: true, text: yLabel, font: { size: 11 } } }
+    }
+  };
+}
+
+// ═══════════════════════════════════════════════════════
+// HEATMAP — combined or per room
+// ═══════════════════════════════════════════════════════
+let heatmapRoom = 'all';
+let _lastFilteredHeatmap = null;
+
+function setHeatmapRoom(room) {
+  heatmapRoom = room;
+  const sel = document.getElementById('heatmap-room-select');
+  if (sel) sel.value = room;
+  const apIds = Object.keys(_lastFilteredHeatmap || {});
+  const roomName = room === 'all'
+    ? 'all rooms combined'
+    : (roomConfig[room]?.name || room);
+  document.getElementById('heatmap-hint').textContent =
+    `Average connected clients — ${roomName}. Darker = busier.`;
+  if (_lastFilteredHeatmap) renderHeatmap(_lastFilteredHeatmap);
+}
+
+function populateHeatmapRoomSelect(filtered) {
+  const sel = document.getElementById('heatmap-room-select');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="all">All rooms (combined)</option>';
+  Object.keys(filtered).sort().forEach(apId => {
+    const o = document.createElement('option');
+    o.value = apId;
+    o.textContent = roomConfig[apId]?.name || apId;
+    sel.appendChild(o);
+  });
+  // Preserve selection if still valid
+  if (current && (current === 'all' || filtered[current])) {
+    sel.value = current;
+    heatmapRoom = sel.value;
+  } else {
+    heatmapRoom = 'all';
+    sel.value = 'all';
+  }
+}
+
+function renderHeatmap(filtered) {
+  _lastFilteredHeatmap = filtered;
+  const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const DOW  = [1,2,3,4,5,6,0];
+  const f    = getFilters();
+
+  // Which rows to use
+  const sourceRows = heatmapRoom === 'all'
+    ? Object.values(filtered).flat()
+    : (filtered[heatmapRoom] || []);
+
+  // grid[day][hour] = {sum, count}
+  const grid = DAYS.map(() => Array.from({length:24}, () => ({sum:0,count:0})));
+  sourceRows.forEach(r => {
+    const dow = r.time.getDay();
+    const di  = DOW.indexOf(dow);
+    if (di === -1) return;
+    const h = r.time.getHours();
+    grid[di][h].sum   += r.clients;
+    grid[di][h].count += 1;
+  });
+
+  let maxVal = 1;
+  grid.forEach(row => row.forEach(cell => {
+    if (cell.count) maxVal = Math.max(maxVal, cell.sum / cell.count);
+  }));
+
+  const hours = [];
+  for (let h = f.hourFrom; h <= f.hourTo; h++) hours.push(h);
+
+  let html = '<table class="heatmap-table"><thead><tr><th>Day \\ Hour</th>';
+  hours.forEach(h => {
+    const label = h === 0 ? '12am' : h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h-12}pm`;
+    html += `<th>${label}</th>`;
+  });
+  html += '</tr></thead><tbody>';
+
+  DAYS.forEach((day, di) => {
+    html += `<tr><td class="row-label">${day}</td>`;
+    hours.forEach(h => {
+      const cell = grid[di][h];
+      const avg  = cell.count ? cell.sum / cell.count : 0;
+      const pct  = avg / maxVal;
+      const bg   = pct === 0 ? '#f9fafb' : interpolateColor(pct);
+      const text = avg === 0 ? '' : avg.toFixed(1);
+      const textColor = pct > 0.55 ? '#fff' : '#111';
+      html += `<td style="background:${bg};color:${textColor}" title="${day} ${h}:00 — avg ${avg.toFixed(1)} clients">${text}</td>`;
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  document.getElementById('heatmap-container').innerHTML = html;
+}
+
+function interpolateColor(pct) {
+  // White → tafe-blue via yellow
+  const stops = [
+    [255,255,255],  // 0%
+    [232,240,251],  // 20%
+    [176,213,240],  // 40%
+    [0,87,184],     // 70%
+    [0,48,135],     // 100%
+  ];
+  const idx = pct * (stops.length - 1);
+  const lo  = Math.floor(idx);
+  const hi  = Math.min(lo + 1, stops.length - 1);
+  const t   = idx - lo;
+  const r   = Math.round(stops[lo][0] + (stops[hi][0]-stops[lo][0]) * t);
+  const g   = Math.round(stops[lo][1] + (stops[hi][1]-stops[lo][1]) * t);
+  const b   = Math.round(stops[lo][2] + (stops[hi][2]-stops[lo][2]) * t);
+  return `rgb(${r},${g},${b})`;
+}
+
+// ═══════════════════════════════════════════════════════
+// SUMMARY TABLE
+// ═══════════════════════════════════════════════════════
+function renderSummaryTable(filtered) {
+  const tbody = document.getElementById('summary-body');
+  tbody.innerHTML = '';
+  const DAYS_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+  Object.keys(filtered).sort().forEach(apId => {
+    const rows = filtered[apId];
+    const cfg  = roomConfig[apId] || { name: apId, capacity: 30 };
+
+    if (!rows.length) {
+      tbody.innerHTML += `<tr><td>${cfg.name}</td><td class="ap-code">${apId}</td>
+        <td colspan="6" style="color:var(--grey)">No data in selected range</td></tr>`;
+      return;
+    }
+
+    const peak   = Math.max(...rows.map(r=>r.clients));
+    const active = rows.filter(r=>r.clients>0);
+    const avg    = active.length ? (active.reduce((a,r)=>a+r.clients,0)/active.length).toFixed(1) : '0';
+
+    // Busiest day
+    const byDay = {};
+    rows.forEach(r => {
+      const k = r.time.toDateString();
+      byDay[k] = (byDay[k]||0) + r.clients;
+    });
+    const busiestDayKey = Object.entries(byDay).sort((a,b)=>b[1]-a[1])[0]?.[0];
+    const busiestDay = busiestDayKey
+      ? new Date(busiestDayKey).toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'short'})
+      : '—';
+
+    // Busiest hour
+    const byHour = {};
+    rows.forEach(r => {
+      const h = r.time.getHours();
+      byHour[h] = (byHour[h]||0) + r.clients;
+    });
+    const busiestH = Object.entries(byHour).sort((a,b)=>b[1]-a[1])[0]?.[0];
+    const busiestHour = busiestH != null
+      ? (busiestH==0?'12am':busiestH<12?`${busiestH}am`:busiestH==12?'12pm':`${busiestH-12}pm`)
+      : '—';
+
+    const pct     = cfg.capacity ? Math.round(peak / cfg.capacity * 100) : 0;
+    const pillCls = pct >= 90 ? 'pill-red' : pct >= 60 ? 'pill-yellow' : pct > 0 ? 'pill-green' : 'pill-grey';
+
+    tbody.innerHTML += `
+      <tr>
+        <td><strong>${cfg.name}</strong></td>
+        <td class="ap-code">${apId}</td>
+        <td>${peak}</td>
+        <td>${avg}</td>
+        <td>${busiestDay}</td>
+        <td>${busiestHour}</td>
+        <td>${cfg.capacity}</td>
+        <td><span class="pill ${pillCls}">${pct}%</span></td>
+      </tr>`;
+  });
+}
+</script>
+</body>
+</html>
