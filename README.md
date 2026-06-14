@@ -2,7 +2,7 @@
 
 ## What it does
 
-`occupancy-report.html` is a self-contained browser tool that turns CSV exports from your WiFi management system into an occupancy dashboard. No installation, no server — just open the file and upload your data.
+`occupancy-report (index.html)` is a self-contained browser tool that turns CSV exports from your WiFi management system into an occupancy dashboard. No installation, no server — just open the file and upload your data.
 
 ---
 
