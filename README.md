@@ -4,6 +4,8 @@
 
 `occupancy-report.html` is a self-contained browser tool that turns CSV exports from your WiFi management system into an occupancy dashboard. No installation, no server — just open the file and upload your data.
 
+Give it a go at https://cletchy.github.io/WiPi/ input data ample at data_folder
+
 ---
 
 ## Getting started
